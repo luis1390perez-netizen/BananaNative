@@ -55,28 +55,27 @@ public final class MainActivity extends Activity {
     private String pendingId;
     private File pendingPackPick;   // the pack folder the user just picked (remembered in Prefs once it is accepted)
 
-        private static void apply8GbRamTuning() {
+            private static void apply8GbRamTuning() {
         String[][] envVars = {
             {"DM_GUEST_FILE", "1"},
-            {"DM_VK_SPARSE_DENSE_MB", "4"},
-            {"DM_VK_PLACE_PART_MB", "2"},
-            {"DM_VK_PLACE_GRANULE_MB", "1"},
+            {"DM_VK_NDSR", "2"},
+            {"DM_VK_FSR", "0"},
+            {"DM_VK_SPARSE_DENSE_MB", "16"},
+            {"DM_VK_PLACE_PART_MB", "8"},
+            {"DM_VK_PLACE_GRANULE_MB", "2"},
             {"DM_VK_PSO_ASYNC", "1"},
             {"DM_VK_PREWARM", "0"},
-            {"DM_VK_WORKER", "0"},
-            {"DM_VK_ENC", "0"},
-            {"DM_VK_NDSR", "2"},
-            {"DOTNET_GCConserveMemory", "9"},
-            {"DOTNET_GCHeapHardLimitPercent", "65"}
+            {"DM_VK_ENC", "0"}
         };
         for (String[] pair : envVars) {
             try {
-                android.system.Os.setenv(pair[0], pair[1], false);
+                android.system.Os.setenv(pair[0], pair[1], true);
             } catch (Exception e) {
                 android.util.Log.w("nxnative", "Env error " + pair[0]);
             }
         }
     }
+
 
     @Override protected void onCreate(Bundle saved) {
         apply8GbRamTuning();
