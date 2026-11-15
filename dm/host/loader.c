@@ -496,28 +496,16 @@ void nro_load(module_t *m) {
         memcpy(m->pristine, m->base + m->data_off, m->pristine_len);
     }
     if (m->loads) {
-        static void pac_patch_text(module_t *m) {
-    uint32_t *w = (uint32_t *)m->base;
-    const size_t n = (size_t)(m->text_end / 4);
-    size_t cnt = 0, pcnt = 0;
-    for (size_t i = 0; i < n; i++) {
-        const uint32_t v = w[i];
-        if (v == 0xD65F0FFFu || v == 0xD65F0BFFu) {
-            w[i] = 0xD65F03C0u; // RETAB / RETAA -> RET
-            cnt++;
-        } else if (v == 0xD503233Fu || v == 0xD503237Fu ||
-                   v == 0xD50323BFu || v == 0xD50323FFu ||
-                   v == 0xD503231Fu || v == 0xD503235Fu ||
-                   v == 0xD503239Fu || v == 0xD50323DFu ||
-                   (v & 0xFFFFFD1Fu) == 0xDAC1011Fu ||
-                   (v & 0xFFFFFD1Fu) == 0xDAC1111Fu) {
-            w[i] = 0xD503201Fu; // PACI*/PACB*/AUTI*/AUTB* (HINT & reg) -> NOP
-            pcnt++;
-        }
+        memcpy(m->base + m->data_off, m->pristine, m->pristine_len);
+        memset(m->base + m->data_off + m->pristine_len, 0, m->key_page_off - m->data_off - m->pristine_len);
     }
-    if (cnt || pcnt) LOG("%s: %zu RETAB/RETAA -> RET, %zu PAC/AUT -> NOP", m->name, cnt, pcnt);
+    m->loads++; m->loaded = 1; g_loaded[g_nloaded++] = m;
+    relocate(m);
+    unsigned n = 0;
+    for (int i = 0; i < g_nmod; i++) if (g_mod[i].loaded && &g_mod[i] != m) n += rebind(&g_mod[i], m, 1);
+    pthread_rwlock_unlock(&g_modules_mu);
+    LOG("NRO %s loaded (load %u, base %p): %u imports of the modules loaded before bound to it", m->name, m->loads, m->base, n);
 }
-
 
 void nro_unload(module_t *m) {
     pthread_rwlock_wrlock(&g_modules_mu);
@@ -718,25 +706,26 @@ static uint8_t *slurp(const char *path, size_t *n) {
     close(fd); *n = st.st_size; return p;
 }
 
-// Pointer authentication, host side. Switch 2 modules return through RETAA/RETAB
-// in every function that has a PAC prologue. On a CPU without FEAT_PAuth
-// (Armv8.2: Cortex-A78/X1 and older, so Snapdragon 888) the HINT forms
-// (PACIBSP/AUTIBSP) run as NOP, so the return address is never signed, but
-// RETAA/RETAB are UNDEFINED and trap. Trapping them would cost a signal round
-// trip per call, so rewrite them here, once, while the text is still writable:
-// RETAB/RETAA become RET, which is exactly what the failed (NOP) signing leaves
-// valid. The cold PAC instructions stay in crash.c's SIGILL path -- the register
-// forms as NOPs, PACGA computed, since it produces a value and has no
-// single-instruction stand-in.
 static void pac_patch_text(module_t *m) {
     uint32_t *w = (uint32_t *)m->base;
     const size_t n = (size_t)(m->text_end / 4);
-    size_t cnt = 0;
+    size_t cnt = 0, pcnt = 0;
     for (size_t i = 0; i < n; i++) {
         const uint32_t v = w[i];
-        if (v == 0xD65F0FFFu || v == 0xD65F0BFFu) { w[i] = 0xD65F03C0u; cnt++; }   // RETAB / RETAA -> RET
+        if (v == 0xD65F0FFFu || v == 0xD65F0BFFu) {
+            w[i] = 0xD65F03C0u; // RETAB / RETAA -> RET
+            cnt++;
+        } else if (v == 0xD503233Fu || v == 0xD503237Fu ||
+                   v == 0xD50323BFu || v == 0xD50323FFu ||
+                   v == 0xD503231Fu || v == 0xD503235Fu ||
+                   v == 0xD503239Fu || v == 0xD50323DFu ||
+                   (v & 0xFFFFFD1Fu) == 0xDAC1011Fu ||
+                   (v & 0xFFFFFD1Fu) == 0xDAC1111Fu) {
+            w[i] = 0xD503201Fu; // PACI*/PACB*/AUTI*/AUTB* (HINT & reg) -> NOP
+            pcnt++;
+        }
     }
-    if (cnt) LOG("%s: %zu RETAB/RETAA returns rewritten to RET (host CPU has no PAC)", m->name, cnt);
+    if (cnt || pcnt) LOG("%s: %zu RETAB/RETAA -> RET, %zu PAC/AUT -> NOP", m->name, cnt, pcnt);
 }
 
 // Seal the code area immediately after copying into anonymous pages (16 KB pages): [0, text_end) and the patch area are read-only+execute, and from then on any write to the code area crashes on the spot;
