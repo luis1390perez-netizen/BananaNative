@@ -496,16 +496,28 @@ void nro_load(module_t *m) {
         memcpy(m->pristine, m->base + m->data_off, m->pristine_len);
     }
     if (m->loads) {
-        memcpy(m->base + m->data_off, m->pristine, m->pristine_len);
-        memset(m->base + m->data_off + m->pristine_len, 0, m->key_page_off - m->data_off - m->pristine_len);
+        static void pac_patch_text(module_t *m) {
+    uint32_t *w = (uint32_t *)m->base;
+    const size_t n = (size_t)(m->text_end / 4);
+    size_t cnt = 0, pcnt = 0;
+    for (size_t i = 0; i < n; i++) {
+        const uint32_t v = w[i];
+        if (v == 0xD65F0FFFu || v == 0xD65F0BFFu) {
+            w[i] = 0xD65F03C0u; // RETAB / RETAA -> RET
+            cnt++;
+        } else if (v == 0xD503233Fu || v == 0xD503237Fu ||
+                   v == 0xD50323BFu || v == 0xD50323FFu ||
+                   v == 0xD503231Fu || v == 0xD503235Fu ||
+                   v == 0xD503239Fu || v == 0xD50323DFu ||
+                   (v & 0xFFFFFD1Fu) == 0xDAC1011Fu ||
+                   (v & 0xFFFFFD1Fu) == 0xDAC1111Fu) {
+            w[i] = 0xD503201Fu; // PACI*/PACB*/AUTI*/AUTB* (HINT & reg) -> NOP
+            pcnt++;
+        }
     }
-    m->loads++; m->loaded = 1; g_loaded[g_nloaded++] = m;
-    relocate(m);
-    unsigned n = 0;
-    for (int i = 0; i < g_nmod; i++) if (g_mod[i].loaded && &g_mod[i] != m) n += rebind(&g_mod[i], m, 1);
-    pthread_rwlock_unlock(&g_modules_mu);
-    LOG("NRO %s loaded (load %u, base %p): %u imports of the modules loaded before bound to it", m->name, m->loads, m->base, n);
+    if (cnt || pcnt) LOG("%s: %zu RETAB/RETAA -> RET, %zu PAC/AUT -> NOP", m->name, cnt, pcnt);
 }
+
 
 void nro_unload(module_t *m) {
     pthread_rwlock_wrlock(&g_modules_mu);
