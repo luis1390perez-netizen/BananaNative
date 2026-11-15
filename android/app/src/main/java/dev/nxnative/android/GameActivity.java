@@ -379,20 +379,10 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
      */
     private void readinessDialog(String title, String msg, String details, String report, String go, boolean required) {
         String id = titleId();
-                    if (xb == 2) env.add("DM_PAD_LABELLED=2");
-            env.add("DM_GUEST_FILE=1");
-            env.add("DM_VK_NDSR=2");
-            env.add("DM_VK_FSR=0");
-            env.add("DM_VK_SPARSE_DENSE_MB=16");
-            env.add("DM_VK_PLACE_PART_MB=8");
-            env.add("DM_VK_PLACE_GRANULE_MB=2");
-            env.add("DM_VK_PSO_ASYNC=1");
-            env.add("DM_VK_PREWARM=0");
-            env.add("DM_VK_ENC=0");
-            env.addAll(user);
-            for (String kv : env) if (kv.startsWith("DM_OVERLAY=")) overlayEnv = !kv.substring(11).trim().equals("0");
-            String[] args = {"nxhost", packDir.getPath()};
-
+        android.widget.CheckBox again = required ? null : new android.widget.CheckBox(this);
+        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle(title).setCancelable(false).setNeutralButton("Details", null);
+        if (again == null) b.setMessage(msg);
+        else {
             int p = Math.round(20 * getResources().getDisplayMetrics().density);
             android.widget.LinearLayout box = new android.widget.LinearLayout(this);
             box.setOrientation(android.widget.LinearLayout.VERTICAL);
@@ -476,6 +466,15 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
             int xb = Prefs.xboxButtons(this, id);   // Xbox button label swap (Game settings, Settings)
             if (xb > 0) env.add("DM_XBOX_LABELS=1");
             if (xb == 2) env.add("DM_PAD_LABELLED=2");
+            env.add("DM_GUEST_FILE=1");
+            env.add("DM_VK_NDSR=2");
+            env.add("DM_VK_FSR=0");
+            env.add("DM_VK_SPARSE_DENSE_MB=16");
+            env.add("DM_VK_PLACE_PART_MB=8");
+            env.add("DM_VK_PLACE_GRANULE_MB=2");
+            env.add("DM_VK_PSO_ASYNC=1");
+            env.add("DM_VK_PREWARM=0");
+            env.add("DM_VK_ENC=0");
             env.addAll(user);
             for (String kv : env) if (kv.startsWith("DM_OVERLAY=")) overlayEnv = !kv.substring(11).trim().equals("0");
             String[] args = {"nxhost", packDir.getPath()};
